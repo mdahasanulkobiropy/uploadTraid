@@ -1,0 +1,168 @@
+<?php
+
+namespace App\Traits;
+
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Intervention\Image\Facades\Image;
+
+trait UploadAble
+{
+    public function uploadOne(UploadedFile $file, int $width, int $height, string $folder = 'images/',bool $originalExtension = false)
+    {
+        $generateName = date('Ymdhms') . Str::random(6);
+        if ($originalExtension) {
+            $generateNameWithExt = '/' . $generateName . "." . $file->getClientOriginalExtension();
+        } else {
+            $generateNameWithExt = '/' . $generateName . "." . 'webp';
+        }
+        if (!File::exists(public_path($folder))) {
+            File::makeDirectory(public_path($folder), 0777, true);
+        }
+        Image::make($file)->resize($width, $height)->save(public_path($folder . $generateNameWithExt)); //resizing image
+        return $generateNameWithExt;
+    }
+
+//    public function uploadWithWatermark(UploadedFile $file, int $width, int $height, string $position, int $x, int $y, string $folder = 'images/')
+//    {
+//        $generateName = date('Ymdhms') . Str::random(6);
+//        $generateNameWithExt = '/' . $generateName . "." . 'webp';
+////        $generateNameWithExt = '/' . $generateName . "." . $file->getClientOriginalExtension();
+////        if (!File::exists(public_path($folder))) {
+////            File::makeDirectory(public_path($folder), 0777, true);
+////        }
+//        $water = Storage::disk(config('app.files_disk'))->get('/images/watermark.png');
+//        $img = Image::make($file)->resize($width, $height)->insert($water, $position, $x, $y)->stream(); //resizing image+
+//
+//        Storage::disk(config('app.files_disk'))->put($folder.$generateNameWithExt, $img);
+//
+////        Storage::put('public/watermarked/' . $fileName . $extension, $watermarkedImage->encode());
+//        return $generateNameWithExt;
+//    }
+
+    /**
+     * @param null $path
+     * @param string $disk
+     */
+    public function deleteOne($directory, $filename)
+    {
+//        Storage::disk(config('app.files_disk'))->delete($directory . $filename);
+        File::delete(public_path($directory . $filename));
+    }
+
+}
+
+
+############################################
+ use UploadAble;   //use it inside controller 
+##################################################
+--------------------
+ add image upload folder name 
+------------------------------
+ config->imagepath
+
+return [
+    'profile' => 'images/profile',
+     'product' => 'images/product',
+     'example' => 'images/example'
+
+];
+
+################################################################
+-----------------------------------------
+upload update image function::
+------------------------------------------
+     $admin = Admin::find($id);
+     if ($request->hasFile('image')) {
+            $filename = $this->uploadOne($request->image, 300, 300, config('imagepath.profile'));
+            $this->deleteOne(config('imagepath.profile'), $admin->image);
+            $admin->update(['image' => $filename]);    //update new filename
+        }
+-----------------------------------------------
+    after image update then other info update
+--------------------------------------------------
+
+    $admin->update([
+            'name' => strip_tags($request->name),
+            'phone_number' => strip_tags($request->phone),
+            'dob' => !empty($request->dob) ? $request->dob : null,
+        ]);
+
+    // then return page
+       Toastr::success('Information changed Successfully!', 'Success');
+       return redirect()->back();
+########################################################################################################################
+----------------------------------------------
+insert single and multiple image ::
+---------------------------------------------
+
+public function store(Request $request)
+    {
+        $product = new Product();
+        $product->slug = Str::slug($request->name , "_");
+        $product->fill($request->all());
+        // for single image 
+        if ($request->file('featured_image')){
+            $filename = $this->uploadOne($request->featured_image, 445, 534, config('imagepath.featured_image'));
+            $product->featured_image = $filename;
+        }
+
+       // for multiple image
+
+        if ($request->hasFile('product_image')){
+            foreach ($request->file('product_image') as $file){
+                $filename = $this->uploadOne($file, 445, 534, config('imagepath.product_image'));
+                $imgData[]  = $filename;
+            }
+            $product->product_image = implode("|",$imgData);
+        }
+        $product->save();
+        Toastr::success('Information Added Successfully!', 'Success');
+        return back();
+    }
+
+##########################################################
+
+----------------------------------------------
+insert multiple image ::
+---------------------------------------------
+
+     if ($request->hasFile('product_image')){
+            foreach ($request->file('product_image') as $file){
+                $filename = $this->uploadOne($file, 445, 534, config('imagepath.product_image'));
+                $imgData[]  = $filename;
+            }
+            $product->product_image = implode("|",$imgData);
+        }
+
+########################################################################################################################
+----------------------------------------------
+update single and multiple image :::
+---------------------------------------------
+
+       $product = Product::findOrFail(decrypt($id));
+
+        $product->slug = Str::slug($request->name , "_");
+
+        if ($request->file('featured_image')) {
+            $filename = $this->uploadOne($request->featured_image, 445, 534, config('imagepath.featured_image'));
+            $this->deleteOne(config('imagepath.featured_image'), $product->featured_image);
+            $product->update(['featured_image' => $filename]);
+        }
+        if ($request->hasFile('product_image')){
+            foreach ($request->file('product_image') as $file){
+                $filename = $this->uploadOne($file, 445, 534, config('imagepath.product_image'));
+                $imgData[] = $filename;
+                $product->product_image = implode("|",$imgData);
+                $product->update(['product_image' =>  $product->product_image]);
+            }
+
+        }
+        $product->update($request->except(['token', 'featured_image','gallery_image']));
+        Toastr::success('Information update Successfully!', 'Success');
+        return redirect()->route('product.index');
+
+###############################################################################################################################################
+
